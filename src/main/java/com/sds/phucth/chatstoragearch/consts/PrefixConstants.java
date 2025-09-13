@@ -4,5 +4,7 @@ public interface PrefixConstants {
     interface Ref {
         String CAS = "cas:";
         String MESSAGE_REF = "seg:%s:%d:%d";
+        String CAS_READ = "cas";
+        String SEG = "seg:";
     }
 }
