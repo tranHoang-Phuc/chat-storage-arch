@@ -8,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-public interface MessageRefRepo extends JpaRepository<MessageRef, String> {
+public interface MessageRefRepository extends JpaRepository<MessageRef, String> {
     @Query(value = """
     select * from messages_ref
     where conversation_id = :cid and seq > :afterSeq

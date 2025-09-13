@@ -10,4 +10,7 @@ public interface S3Constants {
     interface Range {
         String BYTE_FORMAT = "bytes=%d-%d";
     }
+    interface ContentType {
+        String ZSTD = "application/zstd";
+    }
 }

@@ -40,3 +40,6 @@ app:
       deleteCasAfterDays: 3
    redis:
       idempotencyTtlSeconds: 86400
+
+topic:
+   write: msg.written
