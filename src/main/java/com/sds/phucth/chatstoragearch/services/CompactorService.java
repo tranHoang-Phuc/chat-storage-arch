@@ -15,10 +15,16 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
+import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -84,6 +90,36 @@ public class CompactorService {
             }
         }
         messageRefRepository.saveAll(messageRefs);
+    }
 
+    @Transactional
+    @Scheduled(fixedDelay = 15000)
+    public void runPlanner() throws Exception {
+        OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(30);
+        List<MessageRef> cand = messageRefRepository.findEligibleForCompaction(cutoff);
+
+        // Group by conversationId, rồi cắt theo targetBytes
+        Map<String, List<MessageRef>> byConv = cand.stream()
+                .collect(Collectors.groupingBy(MessageRef::getConversationId));
+
+        for (var entry : byConv.entrySet()) {
+            String conv = entry.getKey();
+            List<MessageRef> list = entry.getValue();
+            list.sort(Comparator.comparingLong(MessageRef::getSeq));
+
+            List<MessageRef> bucket = new ArrayList<>();
+            int approx = 0;
+            for (MessageRef mr : list) {
+                bucket.add(mr);
+                approx += 2048; // ước lượng mỗi record ~2KB nén
+                if (approx >= targetBytes) {
+                    compactGroup("default", YearMonth.now(ZoneOffset.UTC).toString(), conv, bucket);
+                    bucket = new ArrayList<>(); approx = 0;
+                }
+            }
+            if (!bucket.isEmpty()) {
+                compactGroup("default", YearMonth.now(ZoneOffset.UTC).toString(), conv, bucket);
+            }
+        }
     }
 }
