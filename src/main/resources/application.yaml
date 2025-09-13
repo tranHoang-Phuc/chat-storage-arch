@@ -1,0 +1,42 @@
+spring:
+   application:
+      name: chat-storage-arch
+
+   datasource:
+      url: jdbc:sqlserver://localhost:1433;databaseName=demo_message_storage;encrypt=false;trustServerCertificate=true
+      username: sa
+      password: PcyTt11@
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      dialect: org.hibernate.dialect.SQLServerDialect
+      hikari:
+         maximum-pool-size: 10
+         minimum-idle: 5
+         idle-timeout: 30000
+   jpa:
+      hibernate:
+         ddl-auto: update
+      properties:
+        hibernate:
+           jdbc:
+             time_zone: UTC
+   data:
+      redis:
+         host: localhost
+         port: 6379
+
+   kafka:
+      bootstrap-servers: localhost:9092
+
+
+app:
+   s3:
+      bucket: chat
+      region: us-east-1
+      prefix: v1
+      kmsKeyId: ${APP_S3_KMS_KEY_ID}
+   compaction:
+      minAgeMinutes: 30
+      segmentTargetBytes: 16777216
+      deleteCasAfterDays: 3
+   redis:
+      idempotencyTtlSeconds: 86400
