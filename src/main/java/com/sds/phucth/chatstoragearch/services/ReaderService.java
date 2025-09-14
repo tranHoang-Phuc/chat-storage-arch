@@ -33,7 +33,6 @@ public class ReaderService {
     ObjectMapper objectMapper;
     StringRedisTemplate redisTemplate;
     
-    // Thread pool for parallel processing
     Executor executor = Executors.newFixedThreadPool(10);
 
     @Value("${app.s3.prefix}")
@@ -42,7 +41,6 @@ public class ReaderService {
 
     public List<Map<String,Object>> readWindow(String conversationId, long cursor, int limit, boolean asc) throws Exception {
         try {
-            // Validate input parameters
             if (conversationId == null || conversationId.trim().isEmpty()) {
                 throw new IllegalArgumentException("Conversation ID cannot be null or empty");
             }
@@ -58,7 +56,6 @@ public class ReaderService {
                 return Collections.emptyList();
             }
 
-            // Group references by type for parallel processing
             Map<String, List<MessageRef>> casRefs = new HashMap<>();
             Map<String, SegRequest> segRefs = new HashMap<>();
 
@@ -71,15 +68,12 @@ public class ReaderService {
                 }
             }
 
-            // Process CAS and SEG references in parallel
             CompletableFuture<List<Map<String, Object>>> casFuture = processCasRefs(casRefs);
             CompletableFuture<List<Map<String, Object>>> segFuture = processSegRefs(segRefs);
 
-            // Combine results maintaining order
             List<Map<String, Object>> casResults = casFuture.get();
             List<Map<String, Object>> segResults = segFuture.get();
 
-            // Merge results while maintaining the original order
             return mergeResultsInOrder(refs, casResults, segResults);
 
         } catch (Exception e) {
@@ -160,13 +154,10 @@ public class ReaderService {
                 .sorted(Comparator.comparingLong(Slice::getStart))
                 .collect(Collectors.toList());
 
-        // Merge consecutive slices to reduce S3 range requests
         List<long[]> mergedRanges = mergeConsecutiveRanges(slices);
 
-        // Resolve S3 key for segment data
         String dataKey = resolveSegKeyFromRedis(segRequest.getSegUlid());
 
-        // Fetch merged ranges in parallel
         Map<Long, byte[]> blockCache = new HashMap<>();
         List<CompletableFuture<Void>> fetchTasks = mergedRanges.stream()
                 .map(range -> CompletableFuture.runAsync(() -> {
@@ -180,10 +171,8 @@ public class ReaderService {
                 }, executor))
                 .collect(Collectors.toList());
 
-        // Wait for all fetches to complete
         CompletableFuture.allOf(fetchTasks.toArray(new CompletableFuture[0])).join();
 
-        // Extract individual slices from merged blocks
         List<Map<String, Object>> results = new ArrayList<>();
         for (Slice slice : slices) {
             try {
@@ -216,10 +205,8 @@ public class ReaderService {
                 curStart = sliceStart;
                 curEnd = sliceEnd;
             } else if (sliceStart <= curEnd + 1) {
-                // Consecutive or overlapping - merge
                 curEnd = Math.max(curEnd, sliceEnd);
             } else {
-                // Gap - finalize current range and start new one
                 merged.add(new long[]{curStart, curEnd});
                 curStart = sliceStart;
                 curEnd = sliceEnd;
@@ -254,7 +241,6 @@ public class ReaderService {
     private List<Map<String, Object>> mergeResultsInOrder(List<MessageRef> originalRefs, 
                                                          List<Map<String, Object>> casResults, 
                                                          List<Map<String, Object>> segResults) {
-        // This is a simplified implementation - in practice, you might need more sophisticated ordering
         List<Map<String, Object>> allResults = new ArrayList<>();
         allResults.addAll(casResults);
         allResults.addAll(segResults);
@@ -269,23 +255,17 @@ public class ReaderService {
             if (s3Key != null && !s3Key.trim().isEmpty()) {
                 return s3Key;
             }
-            
-            // Fallback: construct key from segUlid if not found in Redis
-            // This is a temporary fallback - in production, all keys should be in Redis
+
             log.warn("Segment key not found in Redis for segUlid: {}, using fallback construction", segUlid);
             return constructSegKeyFromUlid(segUlid);
             
         } catch (Exception e) {
             log.error("Error resolving segment key from Redis for segUlid {}: {}", segUlid, e.getMessage(), e);
-            // Fallback to constructed key
             return constructSegKeyFromUlid(segUlid);
         }
     }
     
     private String constructSegKeyFromUlid(String segUlid) {
-        // This is a fallback method - ideally all keys should be stored in Redis
-        // For now, we'll construct a basic key structure
-        // In production, this should be replaced with proper key resolution
         return String.format("%s/seg/unknown/unknown/unknown/seg-%s.jsonl.zst", prefix, segUlid);
     }
 }
