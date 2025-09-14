@@ -85,7 +85,7 @@ public class S3Service {
     private void checkKmsAvailability() {
         if (kmsKey.isPresent() && !kmsKey.get().trim().isEmpty()) {
             // Bật lên nếu có
-            kmsAvailable = false;
+            kmsAvailable = true;
             log.warn("KMS key {} is configured but KMS encryption is disabled to avoid permission issues. Using AES256 encryption instead.", kmsKey.get());
         } else {
             kmsAvailable = false;
