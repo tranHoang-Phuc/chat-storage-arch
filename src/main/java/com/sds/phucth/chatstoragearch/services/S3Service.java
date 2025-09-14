@@ -61,6 +61,8 @@ public class S3Service {
             if (accessKeyId != null && !accessKeyId.trim().isEmpty() && 
                 secretAccessKey != null && !secretAccessKey.trim().isEmpty()) {
                 AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+                log.info("accesId {}", accessKeyId);
+                log.info("secretAccessKey {}", secretAccessKey);
                 s3Client = S3Client.builder()
                         .region(awsRegion)
                         .credentialsProvider(StaticCredentialsProvider.create(credentials))

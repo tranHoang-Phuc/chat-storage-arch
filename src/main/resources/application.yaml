@@ -36,7 +36,7 @@ spring:
 
 app:
    s3:
-      bucket: chat
+      bucket: chat-storage-arch-chat
       region: us-east-1
       prefix: v1
       kmsKeyId: ${APP_S3_KMS_KEY_ID}
