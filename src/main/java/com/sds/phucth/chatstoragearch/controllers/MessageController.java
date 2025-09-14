@@ -6,6 +6,9 @@ import com.sds.phucth.chatstoragearch.dto.MessageRequest;
 import com.sds.phucth.chatstoragearch.services.L0WriterService;
 import com.sds.phucth.chatstoragearch.services.ReaderService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -65,9 +68,9 @@ public class MessageController {
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getMessages(
             @PathVariable String conversationId,
-            @RequestParam("cursor") long cursor,
-            @RequestParam("limit") int limit,
-            @RequestParam("order") String order) {
+            @RequestParam(defaultValue = "0") long cursor,
+            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit,
+            @RequestParam(defaultValue = "asc") @Pattern(regexp="(?i)asc|desc") String order) {
 
         boolean ascending = order.equalsIgnoreCase("asc");
 

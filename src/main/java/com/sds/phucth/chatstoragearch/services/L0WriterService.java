@@ -44,21 +44,29 @@ public class L0WriterService {
     @NonFinal
     String writeTopic;
     public Optional<String> checkIfMessageAlreadyExists(String clientMsgId) {
-        String key = "seen:" + clientMsgId;
-        String msgId = redisTemplate.opsForValue().get(key);
-        return Optional.ofNullable(msgId);
+        return idempotencyService.already(clientMsgId);
     }
     public ChatRecord writeL0(String conversationId, String role, Object body,
                               Map<String, Object> meta, String clientMsgId) throws JsonProcessingException {
         if (clientMsgId != null) {
             // idempotency
-            var exist = idempotencyService.already(conversationId);
+            var exist = idempotencyService.already(clientMsgId);
 
             if (exist.isPresent()) {
-                /* đã ghi trước đó -> load từ db hoặc trả ack "đã nhận"
-                   hoặc bắn event relay (optional)
-                */
-
+                // Trả về lại thông tin đã ghi (tìm seq từ DB)
+                String msgId = exist.get();
+                MessageRef mr = messageRefRepository.findById(msgId)
+                        .orElseThrow(() -> new IllegalStateException("Idempotent msgId exists but not in DB"));
+                // Có thể đọc CAS để reconstruct đầy đủ record; tối thiểu trả seq + msgId
+                return ChatRecord.builder()
+                        .msgId(msgId)
+                        .conversationId(conversationId)
+                        .seq(mr.getSeq())
+                        .role(mr.getRole())
+                        .body(body) // hoặc null; tuỳ bạn muốn trả gì cho controller
+                        .meta(meta)
+                        .createdAt(mr.getCreatedAt())
+                        .build();
             }
         }
         String messageId = Ulids.newUlid();
@@ -95,8 +103,6 @@ public class L0WriterService {
                 .build();
 
         messageRefRepository.save(messageRef);
-
-        // mark idempotent và emit Kafka cho compaction
 
         if (clientMsgId != null) {
             idempotencyService.markIfFirst(clientMsgId, messageId);

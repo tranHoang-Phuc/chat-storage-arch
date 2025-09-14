@@ -12,5 +12,6 @@ public interface S3Constants {
     }
     interface ContentType {
         String ZSTD = "application/zstd";
+        String JSON = "application/json";
     }
 }

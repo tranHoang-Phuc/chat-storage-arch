@@ -111,16 +111,14 @@ public class ReaderService {
         if (!casRefs.containsKey(PrefixConstants.Ref.CAS_READ)) {
             return CompletableFuture.completedFuture(Collections.emptyList());
         }
-
         List<MessageRef> refs = casRefs.get(PrefixConstants.Ref.CAS_READ);
         return CompletableFuture.supplyAsync(() -> {
             List<Map<String, Object>> results = new ArrayList<>();
             for (MessageRef ref : refs) {
                 try {
-                    String hash = ref.getRefId().substring(4);
+                    String hash = ref.getRefId().substring(PrefixConstants.Ref.CAS.length()); // <-- fix
                     byte[] comp = s3Service.getBytes(S3Objects.casKey(prefix, hash));
                     byte[] json = ZstdCodec.decompress(comp);
-                    @SuppressWarnings("unchecked")
                     Map<String, Object> record = objectMapper.readValue(json, Map.class);
                     results.add(record);
                 } catch (Exception e) {
@@ -238,31 +236,36 @@ public class ReaderService {
         return 0;
     }
 
-    private List<Map<String, Object>> mergeResultsInOrder(List<MessageRef> originalRefs, 
-                                                         List<Map<String, Object>> casResults, 
-                                                         List<Map<String, Object>> segResults) {
-        List<Map<String, Object>> allResults = new ArrayList<>();
-        allResults.addAll(casResults);
-        allResults.addAll(segResults);
-        return allResults;
+    private List<Map<String, Object>> mergeResultsInOrder(
+            List<MessageRef> originalRefs,
+            List<Map<String, Object>> casResults,
+            List<Map<String, Object>> segResults) {
+
+        Map<String, Map<String, Object>> byMsgId = new HashMap<>();
+        for (Map<String, Object> r : casResults) {
+            Object id = r.get("msgId");
+            if (id != null) byMsgId.put(id.toString(), r);
+        }
+        for (Map<String, Object> r : segResults) {
+            Object id = r.get("msgId");
+            if (id != null) byMsgId.put(id.toString(), r);
+        }
+
+        List<Map<String, Object>> ordered = new ArrayList<>(originalRefs.size());
+        for (MessageRef ref : originalRefs) {
+            Map<String, Object> r = byMsgId.get(ref.getId());
+            if (r != null) ordered.add(r);
+        }
+        return ordered;
     }
 
     private String resolveSegKeyFromRedis(String segUlid) {
-        try {
-            String redisKey = "segKey:" + segUlid;
-            String s3Key = redisTemplate.opsForValue().get(redisKey);
-            
-            if (s3Key != null && !s3Key.trim().isEmpty()) {
-                return s3Key;
-            }
-
-            log.warn("Segment key not found in Redis for segUlid: {}, using fallback construction", segUlid);
-            return constructSegKeyFromUlid(segUlid);
-            
-        } catch (Exception e) {
-            log.error("Error resolving segment key from Redis for segUlid {}: {}", segUlid, e.getMessage(), e);
-            return constructSegKeyFromUlid(segUlid);
+        String redisKey = "segKey:" + segUlid;
+        String s3Key = redisTemplate.opsForValue().get(redisKey);
+        if (s3Key == null || s3Key.isBlank()) {
+            throw new IllegalStateException("Missing Redis mapping for " + redisKey + " (compactor must set it)");
         }
+        return s3Key;
     }
     
     private String constructSegKeyFromUlid(String segUlid) {

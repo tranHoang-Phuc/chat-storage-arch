@@ -61,8 +61,6 @@ public class S3Service {
             if (accessKeyId != null && !accessKeyId.trim().isEmpty() && 
                 secretAccessKey != null && !secretAccessKey.trim().isEmpty()) {
                 AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
-                log.info("accesId {}", accessKeyId);
-                log.info("secretAccessKey {}", secretAccessKey);
                 s3Client = S3Client.builder()
                         .region(awsRegion)
                         .credentialsProvider(StaticCredentialsProvider.create(credentials))
@@ -86,8 +84,7 @@ public class S3Service {
     
     private void checkKmsAvailability() {
         if (kmsKey.isPresent() && !kmsKey.get().trim().isEmpty()) {
-            // For now, assume KMS is not available to avoid permission issues
-            // This can be enabled later when proper KMS permissions are configured
+            // Bật lên nếu có
             kmsAvailable = false;
             log.warn("KMS key {} is configured but KMS encryption is disabled to avoid permission issues. Using AES256 encryption instead.", kmsKey.get());
         } else {
