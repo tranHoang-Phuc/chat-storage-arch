@@ -1,6 +1,12 @@
 spring:
    application:
       name: chat-storage-arch
+   
+   jackson:
+      serialization:
+         write-dates-as-timestamps: false
+      deserialization:
+         fail-on-unknown-properties: false
 
    datasource:
       url: jdbc:sqlserver://localhost:1433;databaseName=demo_message_storage;encrypt=false;trustServerCertificate=true
@@ -34,6 +40,8 @@ app:
       region: us-east-1
       prefix: v1
       kmsKeyId: ${APP_S3_KMS_KEY_ID}
+      accessKeyId: ${AWS_ACCESS_KEY_ID:}
+      secretAccessKey: ${AWS_SECRET_ACCESS_KEY:}
    compaction:
       minAgeMinutes: 30
       segmentTargetBytes: 16777216

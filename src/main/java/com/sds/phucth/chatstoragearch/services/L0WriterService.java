@@ -14,12 +14,14 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,7 @@ public class L0WriterService {
     MessageRefRepository messageRefRepository;
     ObjectMapper objectMapper;
     KafkaTemplate<String, byte[]> kafkaTemplate;
+    StringRedisTemplate redisTemplate;
 
     @Value("${app.s3.prefix}")
     @NonFinal
@@ -40,7 +43,11 @@ public class L0WriterService {
     @Value("${topic.write}")
     @NonFinal
     String writeTopic;
-
+    public Optional<String> checkIfMessageAlreadyExists(String clientMsgId) {
+        String key = "seen:" + clientMsgId;
+        String msgId = redisTemplate.opsForValue().get(key);
+        return Optional.ofNullable(msgId);
+    }
     public ChatRecord writeL0(String conversationId, String role, Object body,
                               Map<String, Object> meta, String clientMsgId) throws JsonProcessingException {
         if (clientMsgId != null) {

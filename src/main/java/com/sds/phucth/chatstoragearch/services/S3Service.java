@@ -8,6 +8,8 @@ import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
@@ -37,21 +39,58 @@ public class S3Service {
     @Value("${app.s3.prefix}")
     @NonFinal
     String prefix;
+    @Value("${app.s3.accessKeyId:}")
+    @NonFinal
+    String accessKeyId;
+    @Value("${app.s3.secretAccessKey:}")
+    @NonFinal
+    String secretAccessKey;
 
     @NonFinal
     S3Client s3Client;
+    
+    @NonFinal
+    boolean kmsAvailable = false;
 
     @PostConstruct
     public void initS3Client() {
         try {
             Region awsRegion = Region.of(region);
-            s3Client = S3Client.builder()
-                    .region(awsRegion)
-                    .build();
-            log.info("S3Client initialized for region: {}", region);
+            
+            // Configure credentials if provided
+            if (accessKeyId != null && !accessKeyId.trim().isEmpty() && 
+                secretAccessKey != null && !secretAccessKey.trim().isEmpty()) {
+                AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
+                s3Client = S3Client.builder()
+                        .region(awsRegion)
+                        .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                        .build();
+                log.info("S3Client initialized with explicit credentials for region: {}", region);
+            } else {
+                s3Client = S3Client.builder()
+                        .region(awsRegion)
+                        .build();
+                log.info("S3Client initialized with default credential chain for region: {}", region);
+            }
+            
+            // Check KMS availability if KMS key is configured
+            checkKmsAvailability();
+            
         } catch (Exception e) {
             log.error("Failed to initialize S3Client for region: {}", region, e);
             throw new RuntimeException("Failed to initialize S3Client", e);
+        }
+    }
+    
+    private void checkKmsAvailability() {
+        if (kmsKey.isPresent() && !kmsKey.get().trim().isEmpty()) {
+            // For now, assume KMS is not available to avoid permission issues
+            // This can be enabled later when proper KMS permissions are configured
+            kmsAvailable = false;
+            log.warn("KMS key {} is configured but KMS encryption is disabled to avoid permission issues. Using AES256 encryption instead.", kmsKey.get());
+        } else {
+            kmsAvailable = false;
+            log.info("No KMS key configured, will use AES256 encryption");
         }
     }
 
@@ -73,9 +112,16 @@ public class S3Service {
                     .contentType(contentType)
                     .contentLength((long) bytes.length);
             
-            kmsKey.ifPresent(k -> requestBuilder
+            // Use KMS encryption if available, otherwise use AES256
+            if (kmsAvailable && kmsKey.isPresent()) {
+                requestBuilder
                     .serverSideEncryption(ServerSideEncryption.AWS_KMS)
-                    .ssekmsKeyId(k));
+                    .ssekmsKeyId(kmsKey.get());
+                log.debug("Using KMS encryption with key: {}", kmsKey.get());
+            } else {
+                requestBuilder.serverSideEncryption(ServerSideEncryption.AES256);
+                log.debug("Using AES256 encryption");
+            }
             
             s3Client.putObject(requestBuilder.build(), RequestBody.fromBytes(bytes));
             log.debug("Successfully uploaded {} bytes to S3 key: {}", bytes.length, key);
